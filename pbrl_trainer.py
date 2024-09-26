@@ -2,8 +2,6 @@ import argparse
 import json
 import gym
 
-import torch as th
-
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
@@ -11,27 +9,17 @@ from stable_baselines3.common.monitor import Monitor
 from pantheonrl.common.wrappers import frame_wrap, recorder_wrap
 from pantheonrl.common.agents import OnPolicyAgent, StaticPolicyAgent
 
-from pantheonrl.algos.adap.adap_learn import ADAP
-from pantheonrl.algos.adap.policies import AdapPolicyMult, AdapPolicy
-from pantheonrl.algos.adap.agent import AdapAgent
-
 from pantheonrl.algos.modular.learn import ModularAlgorithm
 from pantheonrl.algos.modular.policies import ModularPolicy
 
 from pantheonrl.algos.bc import BCShell, reconstruct_policy
 
-from pantheonrl.envs.rpsgym.rps import RPSEnv, RPSWeightedAgent
-from pantheonrl.envs.blockworldgym import simpleblockworld, blockworld
-from pantheonrl.envs.liargym.liar import LiarEnv, LiarDefaultAgent
-
 from overcookedgym.overcooked_utils import LAYOUT_LIST
 
-ENV_LIST = ['RPS-v0', 'BlockEnv-v0', 'BlockEnv-v1', 'LiarsDice-v0',
-            'OvercookedMultiEnv-v0']
+ENV_LIST = ['OvercookedMultiEnv-v0']
 
-ADAP_TYPES = ['ADAP', 'ADAP_MULT']
-EGO_LIST = ['PPO', 'ModularAlgorithm', 'LOAD'] + ADAP_TYPES
-PARTNER_LIST = ['PPO', 'DEFAULT', 'FIXED'] + ADAP_TYPES
+EGO_LIST = ['PPO', 'ModularAlgorithm', 'LOAD']
+PARTNER_LIST = ['PPO', 'DEFAULT', 'FIXED']
 
 
 class EnvException(Exception):
@@ -63,33 +51,8 @@ def input_check(args):
         raise EnvException("Must define log and names for tensorboard")
 
 
-def latent_check(args):
-    # Check for ADAP
-    all_adap = all([v in ADAP_TYPES for v in args.alt])
-    if args.ego not in ADAP_TYPES or not all_adap:
-        raise EnvException(
-            "both agents must be ADAP or ADAP_MULT to share latent spaces")
-
-    if 'context_size' not in args.ego_config:
-        args.ego_config['context_size'] = 3
-    if 'context_sampler' not in args.ego_config:
-        args.ego_config['context_sampler'] = "l2"
-
-    for conf in args.alt_config:
-        if 'context_size' not in conf:
-            conf['context_size'] = args.ego_config['context_size']
-        elif conf['context_size'] != args.ego_config['context_size']:
-            raise EnvException("both agents must have similar configs \
-                                to share latent spaces")
-
-        if 'context_sampler' not in conf:
-            conf['context_sampler'] = args.ego_config['context_sampler']
-        elif conf['context_sampler'] != args.ego_config['context_sampler']:
-            raise EnvException("both agents must have similar configs \
-                                to share latent spaces")
-
-
 def generate_env(args):
+    ## TODO multi-processing
     env = gym.make(args.env, **args.env_config)
 
     altenv = env.getDummyEnv(1)
@@ -124,10 +87,6 @@ def generate_ego(env, args):
         return model
     elif args.ego == 'PPO':
         return PPO(policy='MlpPolicy', **kwargs)
-    elif args.ego == 'ADAP':
-        return ADAP(policy=AdapPolicy, **kwargs)
-    elif args.ego == 'ADAP_MULT':
-        return ADAP(policy=AdapPolicyMult, **kwargs)
     elif args.ego == 'ModularAlgorithm':
         policy_kwargs = dict(num_partners=len(args.alt))
         return ModularAlgorithm(policy=ModularPolicy,
@@ -138,14 +97,7 @@ def generate_ego(env, args):
 
 
 def gen_load(config, policy_type, location):
-    if policy_type in ADAP_TYPES:
-        if 'latent_val' not in config:
-            raise EnvException("latent_val needs to be specified for \
-                                FIXED ADAP policy")
-        latent_val = th.tensor(config.pop('latent_val'))
-        agent = ADAP.load(location)
-        agent.policy.set_context(latent_val)
-    elif policy_type == 'PPO':
+    if policy_type == 'PPO':
         agent = PPO.load(location)
     elif policy_type == 'ModularAlgorithm':
         agent = ModularAlgorithm.load(location)
@@ -162,28 +114,9 @@ def gen_fixed(config, policy_type, location):
     return StaticPolicyAgent(agent.policy)
 
 
-def gen_default(config, altenv):
-    if isinstance(altenv, RPSEnv):
-        return RPSWeightedAgent(**config)
-
-    if config:
-        raise EnvException("No config possible for this default agent")
-
-    if altenv == simpleblockworld.PartnerEnv:
-        return simpleblockworld.SBWDefaultAgent()
-    elif altenv == blockworld.PartnerEnv:
-        return blockworld.DefaultConstructorAgent()
-    elif isinstance(altenv, LiarEnv):
-        return LiarDefaultAgent()
-    else:
-        raise EnvException("No default policy available")
-
-
 def gen_partner(type, config, altenv, ego, args):
     if type == 'FIXED':
         return gen_fixed(config, config['type'], config['location'])
-    elif type == 'DEFAULT':
-        return gen_default(config, altenv)
 
     if args.tensorboard_log is not None:
         agentarg = {
@@ -201,16 +134,6 @@ def gen_partner(type, config, altenv, ego, args):
 
     if type == 'PPO':
         return OnPolicyAgent(PPO(policy='MlpPolicy', **config), **agentarg)
-
-    if type == 'ADAP':
-        alt = ADAP(policy=AdapPolicy, **config)
-    elif type == 'ADAP_MULT':
-        alt = ADAP(policy=AdapPolicyMult, **config)
-    else:
-        raise EnvException("Not a valid policy")
-
-    shared = ego.policy if args.share_latent else None
-    return AdapAgent(alt, latent_syncer=shared, **agentarg)
 
 
 def generate_partners(altenv, env, ego, args):
@@ -319,7 +242,7 @@ if __name__ == '__main__':
             '{"layout_name":"random0"}' -l
             ''')
 
-    parser.add_argument('env',
+    parser.add_argument('env', default='OvercookedMultiEnv-v0',
                         choices=ENV_LIST,
                         help='The environment to train in')
 
@@ -374,11 +297,6 @@ if __name__ == '__main__':
     parser.add_argument('--alt-save',
                         help='File to save the partner agent into')
 
-    parser.add_argument('--share-latent', '-l',
-                        action='store_true',
-                        help='True when both actors are ADAP and want to sync \
-                        latent values')
-
     parser.add_argument('--tensorboard-log',
                         help='Log directory for tensorboard')
 
@@ -396,9 +314,6 @@ if __name__ == '__main__':
     if args.preset:
         args = preset(args, args.preset)
     input_check(args)
-
-    if args.share_latent:
-        latent_check(args)
 
     print(f"Arguments: {args}")
     env, altenv = generate_env(args)
