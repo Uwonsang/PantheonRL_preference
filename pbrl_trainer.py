@@ -331,6 +331,7 @@ if __name__ == '__main__':
         transition = env.get_transitions()
         transition.write_transition(args.record)
 
+    print(1)
     if args.ego_save:
         ego.save(args.ego_save)
     if args.alt_save:
