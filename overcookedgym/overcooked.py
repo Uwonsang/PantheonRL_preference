@@ -8,7 +8,7 @@ from overcooked_ai_py.planning.planners import MediumLevelPlanner, NO_COUNTERS_P
 from pantheonrl.common.multiagentenv import SimultaneousEnv
 
 class OvercookedMultiEnv(SimultaneousEnv):
-    def __init__(self, layout_name, ego_agent_idx=0, baselines=False):
+    def __init__(self, layout_name, is_self_play=False, ego_agent_idx=0, baselines=False):
         """
         base_env: OvercookedEnv
         featurize_fn: what function is used to featurize states returned in the 'both_agent_obs' field
@@ -39,6 +39,7 @@ class OvercookedMultiEnv(SimultaneousEnv):
         self.lA = len(Action.ALL_ACTIONS)
         self.action_space  = gym.spaces.Discrete( self.lA )
         self.ego_agent_idx = ego_agent_idx
+        self.is_self_play = is_self_play
         self.multi_reset()
 
     def _setup_observation_space(self):

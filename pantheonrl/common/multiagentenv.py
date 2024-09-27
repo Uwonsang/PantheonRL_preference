@@ -154,10 +154,15 @@ class MultiAgentEnv(gym.Env, ABC):
             else:
                 p = self._get_partner_num(player)
                 agent = self.partners[p][self.partnerids[p]]
-                actions.append(agent.get_action(ob))
-                if not self.should_update[p]:
-                    agent.update(self.total_rews[player], False)
-                self.should_update[p] = True
+                if self.is_self_play:
+                    actions.append(agent.get_ego_action(ob))
+                else:
+                    p = self._get_partner_num(player)
+                    agent = self.partners[p][self.partnerids[p]]
+                    actions.append(agent.get_action(ob))
+                    if not self.should_update[p]:
+                        agent.update(self.total_rews[player], False)
+                    self.should_update[p] = True
         return np.array(actions)
 
     def _update_players(self, rews, done):

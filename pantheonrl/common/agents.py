@@ -183,6 +183,19 @@ class OnPolicyAgent(Agent):
         self.values = values
         return clip_actions(actions, self.model)[0]
 
+    def get_ego_action(self, obs: Observation) -> np.ndarray:
+        """
+        Return an action given an observation.
+        :param obs: The observation to use
+        :returns: The action to take
+        """
+        obs = obs.obs
+
+        resample_noise(self.model, self.n_steps)
+        actions, values, log_probs = action_from_policy(obs, self.model.policy)
+
+        return clip_actions(actions, self.model)[0]
+
     def update(self, reward: float, done: bool) -> None:
         """
         Add new rewards and done information.

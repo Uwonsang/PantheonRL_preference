@@ -52,8 +52,8 @@ def input_check(args):
 
 
 def generate_env(args):
-    ## TODO multi-processing
-    env = gym.make(args.env, **args.env_config)
+    # TODO multi-processing & gpu-processing
+    env = gym.make(args.env, **args.env_config, is_self_play=args.self_play)
 
     altenv = env.getDummyEnv(1)
 
@@ -138,16 +138,21 @@ def gen_partner(type, config, altenv, ego, args):
 
 def generate_partners(altenv, env, ego, args):
     partners = []
-    for i in range(len(args.alt)):
-        args.partner_num = i
-        v = gen_partner(args.alt[i],
-                        args.alt_config[i],
-                        altenv,
-                        ego,
-                        args)
-        print(f'Partner {i}: {v}')
+    if args.self_play:
+        v = OnPolicyAgent(ego)
         env.add_partner_agent(v)
         partners.append(v)
+    else:
+        for i in range(len(args.alt)):
+            args.partner_num = i
+            v = gen_partner(args.alt[i],
+                            args.alt_config[i],
+                            altenv,
+                            ego,
+                            args)
+            print(f'Partner {i}: {v}')
+            env.add_partner_agent(v)
+            partners.append(v)
     return partners
 
 
@@ -283,6 +288,10 @@ if __name__ == '__main__':
                         default={},
                         help='Config for the environment')
 
+    parser.add_argument('--self_play', '-sp',
+                        action='store_true',
+                        help='self_play method with shared model')
+
     # Wrappers
     parser.add_argument('--framestack', '-f',
                         type=int,
@@ -331,7 +340,6 @@ if __name__ == '__main__':
         transition = env.get_transitions()
         transition.write_transition(args.record)
 
-    print(1)
     if args.ego_save:
         ego.save(args.ego_save)
     if args.alt_save:
