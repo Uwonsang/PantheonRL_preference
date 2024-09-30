@@ -19,7 +19,6 @@ from overcookedgym.overcooked_utils import LAYOUT_LIST
 ENV_LIST = ['OvercookedMultiEnv-v0']
 
 EGO_LIST = ['PPO', 'ModularAlgorithm', 'LOAD']
-PARTNER_LIST = ['PPO', 'DEFAULT', 'FIXED']
 
 
 class EnvException(Exception):
@@ -35,13 +34,6 @@ def input_check(args):
             raise EnvException(
                 f"{args.env_config['layout_name']} is not a valid layout")
 
-    # Construct alt configs
-    if args.alt_config is None:
-        args.alt_config = [{} for _ in args.alt]
-    elif len(args.alt_config) != len(args.alt):
-        raise EnvException(
-            "Number of partners is different from number of configs")
-
     # Construct ego config
     if 'verbose' not in args.ego_config:
         args.ego_config['verbose'] = 1
@@ -55,16 +47,13 @@ def generate_env(args):
     # TODO multi-processing & gpu-processing
     env = gym.make(args.env, **args.env_config, is_self_play=args.self_play)
 
-    altenv = env.getDummyEnv(1)
-
     if args.framestack > 1:
         env = frame_wrap(env, args.framestack)
-        altenv = frame_wrap(altenv, args.framestack)
 
     if args.record is not None:
         env = recorder_wrap(env)
 
-    return env, altenv
+    return env
 
 
 def generate_ego(env, args):
@@ -114,45 +103,13 @@ def gen_fixed(config, policy_type, location):
     return StaticPolicyAgent(agent.policy)
 
 
-def gen_partner(type, config, altenv, ego, args):
-    if type == 'FIXED':
-        return gen_fixed(config, config['type'], config['location'])
-
-    if args.tensorboard_log is not None:
-        agentarg = {
-            'tensorboard_log': args.tensorboard_log,
-            'tb_log_name': args.tensorboard_name+'_alt_'+str(args.partner_num)
-        }
-    else:
-        agentarg = {}
-
-    config['env'] = altenv
-    config['device'] = args.device
-    if args.seed is not None:
-        config['seed'] = args.seed
-    config['verbose'] = args.verbose_partner
-
-    if type == 'PPO':
-        return OnPolicyAgent(PPO(policy='MlpPolicy', **config), **agentarg)
-
-
-def generate_partners(altenv, env, ego, args):
+def generate_partners(env, ego, args):
     partners = []
-    if args.self_play:
-        v = OnPolicyAgent(ego)
-        env.add_partner_agent(v)
-        partners.append(v)
-    else:
-        for i in range(len(args.alt)):
-            args.partner_num = i
-            v = gen_partner(args.alt[i],
-                            args.alt_config[i],
-                            altenv,
-                            ego,
-                            args)
-            print(f'Partner {i}: {v}')
-            env.add_partner_agent(v)
-            partners.append(v)
+
+    v = OnPolicyAgent(ego)
+    env.add_partner_agent(v)
+    partners.append(v)
+
     return partners
 
 
@@ -169,14 +126,11 @@ def preset(args, preset_id):
         if args.tensorboard_log is None:
             args.tensorboard_log = 'logs'
         if args.tensorboard_name is None:
-            args.tensorboard_name = '%s-%s%s-%d' % (
-                env_name, args.ego, args.alt[0], args.seed)
+            args.tensorboard_name = '%s-%s-%d' % (
+                env_name, args.ego, args.seed)
         if args.ego_save is None:
             args.ego_save = 'models/%s-%s-ego-%d' % (
                 env_name, args.ego, args.seed)
-        if args.alt_save is None:
-            args.alt_save = 'models/%s-%s-alt-%d' % (
-                env_name, args.alt[0], args.seed)
         # if not args.record:
         #     args.record = 'trajs/%s-%s%s-%d' % (env_name, args.ego, args.alt[0], args.seed)
     else:
@@ -218,24 +172,7 @@ if __name__ == '__main__':
             Supported ego-agent algorithms include PPO, ModularAlgorithm, ADAP,
             and ADAP_MULT. The default parameters of these algorithms can
             be overriden using --ego-config.
-
-            Alt-Agents:
-            -----------
-            The alt-agents are the partner agents that are embedded in the
-            environment. If multiple are listed, the environment randomly
-            samples one of them to be the partner at the start of each episode.
-
-            Supported alt-agent algorithms include PPO, ADAP, ADAP_MULT,
-            DEFAULT, and FIXED. DEFAULT refers to the default hand-made policy
-            in the environment (if it exists). FIXED refers to a policy that
-            has already been saved to a file, and will not learn anymore.
-
-            Default parameters for these algorithms can be overriden using
-            --alt-config. For FIXED policies, one must have parameters for
-            `type` and `location` to load in the policies. If the FIXED
-            policy is an ADAP policy, it must also have a `latent_val`
-            parameter.
-
+            
             NOTE:
             All configs are based on the json format, and will be interpreted
             as dictionaries for the kwargs of their initializers.
@@ -254,11 +191,6 @@ if __name__ == '__main__':
     parser.add_argument('ego',
                         choices=EGO_LIST,
                         help='Algorithm for the ego agent')
-
-    parser.add_argument('alt',
-                        choices=PARTNER_LIST,
-                        nargs='+',
-                        help='Algorithm for the partner agent')
 
     parser.add_argument('--total-timesteps', '-t',
                         type=int,
@@ -303,8 +235,6 @@ if __name__ == '__main__':
 
     parser.add_argument('--ego-save',
                         help='File to save the ego agent into')
-    parser.add_argument('--alt-save',
-                        help='File to save the partner agent into')
 
     parser.add_argument('--tensorboard-log',
                         help='Log directory for tensorboard')
@@ -325,11 +255,11 @@ if __name__ == '__main__':
     input_check(args)
 
     print(f"Arguments: {args}")
-    env, altenv = generate_env(args)
-    print(f"Environment: {env}; Partner env: {altenv}")
+    env = generate_env(args)
+    print(f"Environment: {env}")
     ego = generate_ego(env, args)
     print(f'Ego: {ego}')
-    partners = generate_partners(altenv, env, ego, args)
+    partners = generate_partners(env, ego, args)
 
     learn_config = {'total_timesteps': args.total_timesteps}
     if args.tensorboard_log:
@@ -342,15 +272,3 @@ if __name__ == '__main__':
 
     if args.ego_save:
         ego.save(args.ego_save)
-    if args.alt_save:
-        if len(partners) == 1:
-            try:
-                partners[0].model.save(args.alt_save)
-            except AttributeError:
-                print("FIXED or DEFAULT partners are not saved")
-        else:
-            for i in range(len(partners)):
-                try:
-                    partners[i].model.save(f"{args.alt_save}/{i}")
-                except AttributeError:
-                    print("FIXED or DEFAULT partners are not saved")

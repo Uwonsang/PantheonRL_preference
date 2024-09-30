@@ -77,6 +77,8 @@ python3 trainer.py LiarsDice-v0 PPO PPO --seed 10 --preset 1
 ```
 # requires Overcooked installation (see above instructions)
 python3 trainer.py OvercookedMultiEnv-v0 PPO PPO --env-config '{"layout_name":"simple"}' --seed 10 --preset 1
+# shared parameter option (self-play)
+python3 pbrl_trainer.py OvercookedMultiEnv-v0 PPO --env-config '{"layout_name":"simple"}' --seed 10 --preset 1 -sp
 ```
 
 For examples on round-robin training followed by partner adaptation, check out these [instructions](overcookedgym/OvercookedAdaptPartnerInstructions.md).
