@@ -49,6 +49,14 @@ git submodule update --init --recursive
 pip install -e overcookedgym/human_aware_rl/overcooked_ai
 ```
 
+
+### Stable-baseline3 Installation
+```
+# stable-baselines3 editable mode
+cd stable-baselines3
+pip install -e .
+```
+
 ### PettingZoo Installation
 ```
 # Optionally install PettingZoo environments
