@@ -6,15 +6,16 @@ import torch as th
 from gym import spaces
 from torch.nn import functional as F
 
-from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
+from stable_baselines3.common.on_policy_with_reward_algorithm import OnPolicyRewardAlgorithm
+# from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 
-SelfPPO = TypeVar("SelfPPO", bound="PPO")
+SelfPPO = TypeVar("SelfPPO", bound="PPO_REWARD")
 
 
-class PPO_REWARD(OnPolicyAlgorithm):
+class PPO_REWARD(OnPolicyRewardAlgorithm):
     """
     Proximal Policy Optimization algorithm (PPO) (clip version)
 
@@ -103,6 +104,7 @@ class PPO_REWARD(OnPolicyAlgorithm):
         re_update: int = 100,
         max_feed: int = 1400,
         size_segment: int = 25,
+        max_ep_len: int = 1000,
         _init_setup_model: bool = True,
     ):
 
@@ -311,11 +313,10 @@ class PPO_REWARD(OnPolicyAlgorithm):
         progress_bar: bool = False,
     ) -> SelfPPO:
 
-        return super().learn(
+        return super(PPO_REWARD, self).learn_unsuper(
             total_timesteps=total_timesteps,
             callback=callback,
             log_interval=log_interval,
             tb_log_name=tb_log_name,
             reset_num_timesteps=reset_num_timesteps,
-            progress_bar=progress_bar,
         )

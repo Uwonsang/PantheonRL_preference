@@ -67,6 +67,32 @@ def generate_ego(env, args):
 
     kwargs['tensorboard_log'] = args.tensorboard_log
 
+    ## TODO update kwargs ppo_reward
+    '''
+    tensorboard_log = args.tensorboard_log,
+    learning_rate = args.lr,
+    batch_size = args.batch_size,
+    n_steps = args.n_steps,
+    ent_coef = args.ent_coef,
+    policy_kwargs = policy_kwargs,
+    use_sde = use_sde,
+    sde_sample_freq = args.sde_freq,
+    gae_lambda = args.gae_lambda,
+    clip_range = clip_range,
+    n_epochs = args.n_epochs,
+    num_interaction = args.re_num_interaction,
+    num_feed = args.re_num_feed,
+    feed_type = args.re_feed_type,
+    re_update = args.re_update,
+    metaworld_flag = metaworld_flag,
+    max_feed = args.re_max_feed,
+    unsuper_step = args.unsuper_step,
+    unsuper_n_epochs = args.unsuper_n_epochs,
+    size_segment = args.re_segment,
+    max_ep_len = max_ep_len,
+    verbose = 1
+    '''
+
     if args.ego == 'LOAD':
         model = gen_load(kwargs, kwargs['type'], kwargs['location'])
         # wrap env in Monitor and VecEnv wrapper
