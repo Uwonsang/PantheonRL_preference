@@ -1,0 +1,28 @@
+# Basic setup
+experiment: ppo_reward
+device: cuda
+seed: 1
+
+# training
+num_train_steps: 1e6
+replay_buffer_capacity: ${num_train_steps}
+num_seed_steps: 5000
+eval_frequency: 10000
+num_eval_episodes: 10
+
+# reward_model
+re_lr : 0.0003
+re_segment : 50
+re_act : tanh
+re-num-interaction : 16000
+re-num-feed : 1
+re_batch : 64
+re-update : 50
+re-feed-type : 0
+re_large_batch : 10
+re-max-feed : 10000
+teacher_beta : 1.0
+teacher_gamma : 1.0
+teacher_eps_mistake : 0.0
+teacher_eps_skip : 0.0
+teacher_eps_equal : 0.0

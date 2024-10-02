@@ -1,13 +1,14 @@
 import argparse
 import json
 import gym
+import yaml
 
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, PPO_REWARD
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
 
 from pantheonrl.common.wrappers import frame_wrap, recorder_wrap
-from pantheonrl.common.agents import OnPolicyAgent, StaticPolicyAgent
+from pantheonrl.common.agents import OnPolicyAgent
 
 from pantheonrl.algos.modular.learn import ModularAlgorithm
 from pantheonrl.algos.modular.policies import ModularPolicy
@@ -15,10 +16,11 @@ from pantheonrl.algos.modular.policies import ModularPolicy
 from pantheonrl.algos.bc import BCShell, reconstruct_policy
 
 from overcookedgym.overcooked_utils import LAYOUT_LIST
+from reward_model import RewardModel
 
 ENV_LIST = ['OvercookedMultiEnv-v0']
 
-EGO_LIST = ['PPO', 'ModularAlgorithm', 'LOAD']
+EGO_LIST = ['PPO', 'PPO_REWARD', 'ModularAlgorithm', 'LOAD']
 
 
 class EnvException(Exception):
@@ -76,6 +78,22 @@ def generate_ego(env, args):
         return model
     elif args.ego == 'PPO':
         return PPO(policy='MlpPolicy', **kwargs)
+    elif args.ego == 'PPO_REWARD':
+        # instantiating the reward model
+        reward_model = RewardModel(
+            env.env.observation_space.shape[0],
+            env.env.action_space.n,
+            size_segment=args.re_segment,
+            activation=args.re_act,
+            lr=args.re_lr,
+            mb_size=args.re_batch,
+            teacher_beta=args.teacher_beta,
+            teacher_gamma=args.teacher_gamma,
+            teacher_eps_mistake=args.teacher_eps_mistake,
+            teacher_eps_skip=args.teacher_eps_skip,
+            teacher_eps_equal=args.teacher_eps_equal,
+            large_batch=args.re_large_batch)
+        return PPO_REWARD(reward_model, policy='MlpPolicy', **kwargs)
     elif args.ego == 'ModularAlgorithm':
         policy_kwargs = dict(num_partners=len(args.alt))
         return ModularAlgorithm(policy=ModularPolicy,
@@ -88,6 +106,8 @@ def generate_ego(env, args):
 def gen_load(config, policy_type, location):
     if policy_type == 'PPO':
         agent = PPO.load(location)
+    elif policy_type == 'PPO_REWARD':
+        agent = PPO_REWARD.load(location)
     elif policy_type == 'ModularAlgorithm':
         agent = ModularAlgorithm.load(location)
     elif policy_type == 'BC':
@@ -96,11 +116,6 @@ def gen_load(config, policy_type, location):
         raise EnvException("Not a valid FIXED/LOAD policy")
 
     return agent
-
-
-def gen_fixed(config, policy_type, location):
-    agent = gen_load(config, policy_type, location)
-    return StaticPolicyAgent(agent.policy)
 
 
 def generate_partners(env, ego, args):
@@ -252,6 +267,14 @@ if __name__ == '__main__':
 
     if args.preset:
         args = preset(args, args.preset)
+
+    if args.ego == 'PPO_REWARD':
+        args_dict = vars(args)
+        with open("./config/pbrl_trainer.yaml") as f:
+            ppo_reward_configs = yaml.load(f, Loader=yaml.FullLoader)
+        combined_configs = {**args_dict, **ppo_reward_configs}
+        args = argparse.Namespace(**combined_configs)
+
     input_check(args)
 
     print(f"Arguments: {args}")

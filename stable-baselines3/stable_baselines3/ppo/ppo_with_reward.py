@@ -74,6 +74,7 @@ class PPO_REWARD(OnPolicyAlgorithm):
 
     def __init__(
         self,
+        reward_model,
         policy: Union[str, Type[ActorCriticPolicy]],
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
@@ -96,6 +97,12 @@ class PPO_REWARD(OnPolicyAlgorithm):
         verbose: int = 0,
         seed: Optional[int] = None,
         device: Union[th.device, str] = "auto",
+        num_interaction: int = 5000,
+        num_feed: int = 1,
+        feed_type: int = 0,
+        re_update: int = 100,
+        max_feed: int = 1400,
+        size_segment: int = 25,
         _init_setup_model: bool = True,
     ):
 
@@ -299,7 +306,7 @@ class PPO_REWARD(OnPolicyAlgorithm):
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 1,
-        tb_log_name: str = "PPO",
+        tb_log_name: str = "PPO_REWARD",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
     ) -> SelfPPO:
