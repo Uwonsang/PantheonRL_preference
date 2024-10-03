@@ -1,9 +1,23 @@
-# Basic setup
+# TODO check hidden-dim, num-layer, normalize, clip-init
+# Basic setup # args from train_PrefPPO
+seed : 1
+n_steps : 500
+lr : 0.0003
+total-timesteps : 500000
+batch_size : 64
+ent_coef : 0
+hidden_dim : 256
+num_layer : 3
+use_sde : False
+sde_freq : 4
 experiment: ppo_reward
-device: cuda
-seed: 1
+gae_lambda : 0.92
+n_epochs : 20
+normalize : 1
+n_envs : 1
 
-# training
+
+# training #train.yaml
 num_train_steps: 1e6
 replay_buffer_capacity: ${num_train_steps}
 num_seed_steps: 5000
@@ -14,15 +28,16 @@ num_eval_episodes: 10
 re_lr : 0.0003
 re_segment : 50
 re_act : tanh
-re-num-interaction : 16000
-re-num-feed : 1
+re_num_interaction : 16000
+re_num_feed : 1
 re_batch : 64
-re-update : 50
-re-feed-type : 0
+re_update : 50
+re_feed_type : 0
 re_large_batch : 10
-re-max-feed : 10000
+re_max_feed : 10000
 teacher_beta : 1.0
 teacher_gamma : 1.0
 teacher_eps_mistake : 0.0
 teacher_eps_skip : 0.0
 teacher_eps_equal : 0.0
+max_ep_len : 1000

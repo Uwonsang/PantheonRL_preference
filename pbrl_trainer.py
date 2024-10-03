@@ -68,30 +68,10 @@ def generate_ego(env, args):
     kwargs['tensorboard_log'] = args.tensorboard_log
 
     ## TODO update kwargs ppo_reward
-    '''
-    tensorboard_log = args.tensorboard_log,
-    learning_rate = args.lr,
-    batch_size = args.batch_size,
-    n_steps = args.n_steps,
-    ent_coef = args.ent_coef,
-    policy_kwargs = policy_kwargs,
-    use_sde = use_sde,
-    sde_sample_freq = args.sde_freq,
-    gae_lambda = args.gae_lambda,
-    clip_range = clip_range,
-    n_epochs = args.n_epochs,
-    num_interaction = args.re_num_interaction,
-    num_feed = args.re_num_feed,
-    feed_type = args.re_feed_type,
-    re_update = args.re_update,
-    metaworld_flag = metaworld_flag,
-    max_feed = args.re_max_feed,
-    unsuper_step = args.unsuper_step,
-    unsuper_n_epochs = args.unsuper_n_epochs,
-    size_segment = args.re_segment,
-    max_ep_len = max_ep_len,
-    verbose = 1
-    '''
+    if args.ego == 'PPO_REWARD':
+        net_arch = [dict(pi=[args.hidden_dim] * args.num_layer,
+                         vf=[args.hidden_dim] * args.num_layer)]
+        policy_kwargs = dict(net_arch=net_arch)
 
     if args.ego == 'LOAD':
         model = gen_load(kwargs, kwargs['type'], kwargs['location'])
@@ -119,7 +99,19 @@ def generate_ego(env, args):
             teacher_eps_skip=args.teacher_eps_skip,
             teacher_eps_equal=args.teacher_eps_equal,
             large_batch=args.re_large_batch)
-        return PPO_REWARD(reward_model, policy='MlpPolicy', **kwargs)
+
+        model = PPO_REWARD(reward_model, 'MlpPolicy', args.ego_config['env'],
+                           n_steps=args.n_steps, batch_size=args.batch_size, n_epochs=args.n_epochs,
+                           gae_lambda=args.gae_lambda, ent_coef=args.ent_coef,
+                           use_sde=args.use_sde, sde_sample_freq=args.sde_freq,
+                           tensorboard_log=args.ego_config['tensorboard_log'], policy_kwargs=policy_kwargs,
+                           seed=args.seed, learning_rate=args.lr,
+                           num_interaction=args.re_num_interaction,
+                           num_feed=args.re_num_feed, feed_type=args.re_feed_type, re_update=args.re_update,
+                           max_feed=args.re_max_feed, size_segment=args.re_segment, max_ep_len=args.max_ep_len,
+                           verbose=args.ego_config['verbose'])
+        return model
+
     elif args.ego == 'ModularAlgorithm':
         policy_kwargs = dict(num_partners=len(args.alt))
         return ModularAlgorithm(policy=ModularPolicy,

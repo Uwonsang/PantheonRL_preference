@@ -7,7 +7,6 @@ from gym import spaces
 from torch.nn import functional as F
 
 from stable_baselines3.common.on_policy_with_reward_algorithm import OnPolicyRewardAlgorithm
-# from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
@@ -109,6 +108,7 @@ class PPO_REWARD(OnPolicyRewardAlgorithm):
     ):
 
         super().__init__(
+            reward_model,
             policy,
             env,
             learning_rate=learning_rate,

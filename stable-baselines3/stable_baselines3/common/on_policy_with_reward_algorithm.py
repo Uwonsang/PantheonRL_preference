@@ -13,7 +13,7 @@ from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import obs_as_tensor, safe_mean
 from stable_baselines3.common.vec_env import VecEnv
-from stable_baselines3.common.logger import Logger
+from logger import Logger
 
 SelfOnPolicyAlgorithm = TypeVar("SelfOnPolicyAlgorithm", bound="OnPolicyRewardAlgorithm")
 
@@ -411,16 +411,11 @@ class OnPolicyRewardAlgorithm(BaseAlgorithm):
         while self.num_timesteps < total_timesteps:
 
             '=============================================================================================='
-            if self.num_timesteps < self.unsuper_step:
-                continue_training = self.collect_rollouts_unsuper(
-                    self.env, callback, self.rollout_buffer,
-                    n_rollout_steps=self.n_steps, replay_buffer=self.unsuper_buffer)
-            else:
-                if self.first_reward_train == 0:
-                    self.learn_reward()
-                    self.num_interactions = 0
-                    self.first_reward_train = 2
-                    self.policy.reset_value()
+            if self.first_reward_train == 0:
+                self.learn_reward()
+                self.num_interactions = 0
+                self.first_reward_train = 2
+                self.policy.reset_value()
             '=============================================================================================='
 
             continue_training = self.collect_rollouts(self.env, callback, self.rollout_buffer, n_rollout_steps=self.n_steps)
