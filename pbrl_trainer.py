@@ -109,7 +109,8 @@ def generate_ego(env, args):
                            num_interaction=args.re_num_interaction,
                            num_feed=args.re_num_feed, feed_type=args.re_feed_type, re_update=args.re_update,
                            max_feed=args.re_max_feed, size_segment=args.re_segment, max_ep_len=args.max_ep_len,
-                           verbose=args.ego_config['verbose'])
+                           verbose=args.ego_config['verbose'],
+                           unsuper_step=args.unsuper_step, unsuper_n_epochs=args.unsuper_n_epochs)
         return model
 
     elif args.ego == 'ModularAlgorithm':
