@@ -2,27 +2,19 @@
 # Basic setup # args from train_PrefPPO
 seed : 1
 n_steps : 400
-lr : 0.0003
-total-timesteps : 500000
+lr : 0.001
+total-timesteps : 2500000
 batch_size : 64
-ent_coef : 0.1
+ent_coef : 0.01
 hidden_dim : 256
 num_layer : 3
 use_sde : False
-sde_freq : 4
+sde_freq : -1
 experiment: ppo_reward
 gae_lambda : 0.98
-n_epochs : 8
+n_epochs : 10
 normalize : 1
-n_envs : 4
-
-
-# training #train.yaml
-num_train_steps: 1e6
-replay_buffer_capacity: ${num_train_steps}
-num_seed_steps: 5000
-eval_frequency: 10000
-num_eval_episodes: 10
+n_envs : 16
 
 # reward_model
 re_lr : 0.0003
@@ -30,14 +22,14 @@ re_segment : 50
 re_act : tanh
 re_num_interaction : 16000
 re_num_feed : 1
-re_batch : 64
-re_update : 50
-re_feed_type : 0
+re_batch : 128
+re_update : 100
+re_feed_type : 1
 re_large_batch : 10
 re_max_feed : 10000
-teacher_beta : 1.0
-teacher_gamma : 1.0
-teacher_eps_mistake : 0.0
-teacher_eps_skip : 0.0
-teacher_eps_equal : 0.0
+teacher_beta : 1
+teacher_gamma : 1
+teacher_eps_mistake : 0
+teacher_eps_skip : 0
+teacher_eps_equal : 0
 max_ep_len : 1000
