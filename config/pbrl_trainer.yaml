@@ -3,11 +3,11 @@
 seed : 1
 n_steps : 400
 lr : 0.001
-total-timesteps : 2500000
+total_timesteps : 2500000
 batch_size : 64
 ent_coef : 0.01
-hidden_dim : 256
-num_layer : 3
+hidden_dim : 64
+num_layer : 2
 use_sde : False
 sde_freq : -1
 experiment: ppo_reward
