@@ -102,8 +102,6 @@ class PPO_REWARD(OnPolicyRewardAlgorithm):
         feed_type: int = 0,
         re_update: int = 100,
         max_feed: int = 1400,
-        unsuper_step: int = 0,
-        unsuper_n_epochs: int = 0,
         size_segment: int = 25,
         max_ep_len: int = 1000,
         _init_setup_model: bool = True,
@@ -133,7 +131,6 @@ class PPO_REWARD(OnPolicyRewardAlgorithm):
             feed_type=feed_type,
             re_update=re_update,
             max_feed=max_feed,
-            unsuper_step=unsuper_step,
             size_segment=size_segment,
             max_ep_len=max_ep_len,
             supported_action_spaces=(
@@ -323,7 +320,7 @@ class PPO_REWARD(OnPolicyRewardAlgorithm):
         progress_bar: bool = False,
     ) -> SelfPPO:
 
-        return super(PPO_REWARD, self).learn_unsuper(
+        return super(PPO_REWARD, self).learn(
             total_timesteps=total_timesteps,
             callback=callback,
             log_interval=log_interval,

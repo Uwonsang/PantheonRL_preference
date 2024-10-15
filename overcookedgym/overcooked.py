@@ -31,7 +31,9 @@ class OvercookedMultiEnv(SimultaneousEnv):
         mlp = MediumLevelPlanner.from_pickle_or_compute(self.mdp, NO_COUNTERS_PARAMS, force_compute=False)
 
         self.base_env = OvercookedEnv(self.mdp, **DEFAULT_ENV_PARAMS)
+        ## TODO for cnn lossless_state_encoding, for bc feature_state
         self.featurize_fn = lambda x: self.mdp.featurize_state(x, mlp)
+        # self.featurize_fn = lambda x: self.mdp.lossless_state_encoding(x)
 
         if baselines: np.random.seed(0)
 

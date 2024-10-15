@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import torch as th
+import torch.nn.functional as F
 from gym import spaces
-import gym
 
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.buffers import DictRolloutBuffer, RolloutBuffer, EntReplayBuffer
@@ -16,9 +16,7 @@ from stable_baselines3.common.utils import obs_as_tensor, safe_mean
 from stable_baselines3.common.vec_env import VecEnv
 from logger import Logger
 
-import utils
-
-SelfOnPolicyAlgorithm = TypeVar("SelfOnPolicyAlgorithm", bound="OnPolicyRewardAlgorithm")
+SelfOnPolicyRewardAlgorithm = TypeVar("SelfOnPolicyRewardAlgorithm", bound="OnPolicyRewardAlgorithm")
 
 
 class OnPolicyRewardAlgorithm(BaseAlgorithm):
@@ -82,7 +80,6 @@ class OnPolicyRewardAlgorithm(BaseAlgorithm):
         max_feed: int = 1400,
         size_segment: int = 25,
         max_ep_len: int = 1000,
-        unsuper_step: int = 0,
         supported_action_spaces: Optional[Tuple[spaces.Space, ...]] = None,
     ):
 
@@ -125,7 +122,6 @@ class OnPolicyRewardAlgorithm(BaseAlgorithm):
         self.noisy_feedback = 0
         if self.reward_model:
             self.reward_batch = self.reward_model.mb_size
-        self.unsuper_step = unsuper_step
         self.avg_train_true_return = 0
         self.size_segment = size_segment
         self.max_ep_len = max_ep_len
@@ -149,19 +145,6 @@ class OnPolicyRewardAlgorithm(BaseAlgorithm):
             gae_lambda=self.gae_lambda,
             n_envs=self.n_envs,
         )
-
-        '=============================================================================================='
-        if self.unsuper_step > 0:
-            self.unsuper_buffer = EntReplayBuffer(
-                self.unsuper_step + 100,
-                self.observation_space,
-                self.action_space,
-                self.device,
-                n_envs=self.n_envs,
-                optimize_memory_usage=False,
-            )
-            self.s_ent_stats = utils.TorchRunningMeanStd(shape=[1], device=self.device)
-        '=============================================================================================='
 
         self.policy = self.policy_class(  # pytype:disable=not-instantiable
             self.observation_space,
@@ -259,7 +242,9 @@ class OnPolicyRewardAlgorithm(BaseAlgorithm):
             new_obs, rewards, dones, infos = env.step(clipped_actions)
 
             '=============================================================================================='
-            obsact = np.concatenate((self._last_obs, clipped_actions), axis=-1)  # num_env x (obs+act)
+            '''In overcooked, action need to make one_hot'''
+            clipped_actions_th = F.one_hot(th.tensor(clipped_actions), num_classes=self.action_space.n)
+            obsact = np.concatenate((self._last_obs, clipped_actions_th.numpy()), axis=-1)  # num_env x (obs+act)
             obsact = np.expand_dims(obsact, axis=1)  # num_env x 1 x (obs+act)
 
             batch_reward = rewards.reshape(-1, 1, 1)
@@ -349,112 +334,6 @@ class OnPolicyRewardAlgorithm(BaseAlgorithm):
 
         return True
 
-    def collect_rollouts_unsuper(
-            self, env: VecEnv, callback: BaseCallback, rollout_buffer: RolloutBuffer,
-            n_rollout_steps: int, replay_buffer: EntReplayBuffer
-    ) -> bool:
-
-        assert self._last_obs is not None, "No previous observation was provided"
-        n_steps = 0
-        rollout_buffer.reset()
-        # Sample new weights for the state dependent exploration
-        if self.use_sde:
-            self.policy.reset_noise(env.num_envs)
-
-        callback.on_rollout_start()
-
-        while n_steps < n_rollout_steps:
-            if self.use_sde and self.sde_sample_freq > 0 and n_steps % self.sde_sample_freq == 0:
-                # Sample a new noise matrix
-                self.policy.reset_noise(env.num_envs)
-
-            with th.no_grad():
-                # Convert to pytorch tensor
-                obs_tensor = th.as_tensor(self._last_obs).to(self.device)
-                actions, values, log_probs = self.policy.forward(obs_tensor)
-            actions = actions.cpu().numpy()
-
-            # Rescale and perform action
-            clipped_actions = actions
-            # Clip the actions to avoid out of bound error
-            if isinstance(self.action_space, gym.spaces.Box):
-                clipped_actions = np.clip(actions, self.action_space.low, self.action_space.high)
-
-            obsact = np.concatenate((self._last_obs, clipped_actions), axis=-1)  # num_env x (obs+act)
-            obsact = np.expand_dims(obsact, axis=1)  # num_env x 1 x (obs+act)
-
-            obs_origin = env.get_original_obs()
-            replay_buffer.add_obs(obs_origin)
-            state_entropy = replay_buffer.compute_state_entropy(obs_origin)
-            self.s_ent_stats.update(state_entropy)
-            norm_state_entropy = state_entropy / self.s_ent_stats.std
-
-            new_obs, rewards, dones, infos = env.step(clipped_actions)
-            next_obs_origin = env.get_original_obs()
-            batch_reward = rewards.reshape(-1, 1, 1)
-
-            pred_reward = norm_state_entropy.reshape(-1).data.cpu().numpy()
-
-            if self.traj_obsact is None:
-                self.traj_obsact = obsact
-                self.traj_reward = batch_reward
-            else:
-                self.traj_obsact = np.concatenate((self.traj_obsact, obsact), axis=1)
-                self.traj_reward = np.concatenate((self.traj_reward, batch_reward), axis=1)
-
-            self.num_timesteps += env.num_envs
-            self.num_interactions += env.num_envs
-
-            # custome log
-            num_dones = int(sum(dones))
-            if num_dones > 0:
-                # add samples to buffer
-                if self.reward_model:
-                    self.reward_model.add_data_batch(self.traj_obsact, self.traj_reward)
-                # reset traj
-                self.traj_obsact, self.traj_reward = None, None
-
-                if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
-                    ep_reward = []
-                    ep_success = []
-                    for idx, info in enumerate(infos):
-                        maybe_ep_info = info.get("episode")
-                        if maybe_ep_info is not None:
-                            ep_reward.append(maybe_ep_info["r"])
-                            if self.metaworld_flag:
-                                ep_success.append(maybe_ep_info["s"])
-
-                    self.custom_logger.log('eval/episode_reward', np.mean(ep_reward), self.num_timesteps)
-                    self.custom_logger.log('eval/true_episode_reward', np.mean(ep_reward), self.num_timesteps)
-                    if self.metaworld_flag:
-                        self.custom_logger.log('eval/true_episode_success', np.mean(ep_success), self.num_timesteps)
-                    self.custom_logger.dump(self.num_timesteps)
-
-            # Give access to local variables
-            callback.update_locals(locals())
-            if callback.on_step() is False:
-                return False
-
-            self._update_info_buffer(infos)
-            n_steps += 1
-
-            if isinstance(self.action_space, gym.spaces.Discrete):
-                # Reshape in case of discrete action
-                actions = actions.reshape(-1, 1)
-            rollout_buffer.add(self._last_obs, actions, pred_reward, self._last_dones, values, log_probs)
-            self._last_obs = new_obs
-            self._last_dones = dones
-
-        with th.no_grad():
-            # Compute value for the last timestep
-            obs_tensor = th.as_tensor(new_obs).to(self.device)
-            _, values, _ = self.policy.forward(obs_tensor)
-
-        rollout_buffer.compute_returns_and_advantage(last_values=values, dones=dones)
-
-        callback.on_rollout_end()
-
-        return True
 
     def train(self) -> None:
         """
@@ -464,14 +343,14 @@ class OnPolicyRewardAlgorithm(BaseAlgorithm):
         raise NotImplementedError
 
     def learn(
-        self: SelfOnPolicyAlgorithm,
+        self: SelfOnPolicyRewardAlgorithm,
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 1,
         tb_log_name: str = "OnPolicyAlgorithm",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
-    ) -> SelfOnPolicyAlgorithm:
+    ) -> SelfOnPolicyRewardAlgorithm:
         iteration = 0
 
         total_timesteps, callback = self._setup_learn(
@@ -508,75 +387,6 @@ class OnPolicyRewardAlgorithm(BaseAlgorithm):
                 self.logger.dump(step=self.num_timesteps)
 
             self.train()
-
-        callback.on_training_end()
-
-        return self
-
-    def learn_unsuper(
-        self: SelfOnPolicyAlgorithm,
-        total_timesteps: int,
-        callback: MaybeCallback = None,
-        log_interval: int = 1,
-        tb_log_name: str = "OnPolicyRewardAlgorithm",
-        reset_num_timesteps: bool = True,
-        progress_bar: bool = False,
-    ) -> SelfOnPolicyAlgorithm:
-        iteration = 0
-
-        total_timesteps, callback = self._setup_learn(
-            total_timesteps,
-            callback,
-            reset_num_timesteps,
-            tb_log_name,
-            progress_bar,
-        )
-
-        callback.on_training_start(locals(), globals())
-
-        while self.num_timesteps < total_timesteps:
-
-            '=============================================================================================='
-            if self.num_timesteps < self.unsuper_step:
-                continue_training = self.collect_rollouts_unsuper(
-                    self.env, callback, self.rollout_buffer,
-                    n_rollout_steps=self.n_steps, replay_buffer=self.unsuper_buffer)
-            else:
-                if self.first_reward_train == 0:
-                    self.learn_reward()
-                    self.num_interactions = 0
-                    self.first_reward_train = 2
-                    self.policy.reset_value()
-            '=============================================================================================='
-
-            continue_training = self.collect_rollouts(self.env, callback, self.rollout_buffer, n_rollout_steps=self.n_steps)
-
-            if continue_training is False:
-                break
-
-            iteration += 1
-            self._update_current_progress_remaining(self.num_timesteps, total_timesteps)
-
-            ## TODO check the Display
-            # Display training infos
-            # if log_interval is not None and iteration % log_interval == 0:
-            #     time_elapsed = max((time.time_ns() - self.start_time) / 1e9, sys.float_info.epsilon)
-            #     fps = int((self.num_timesteps - self._num_timesteps_at_start) / time_elapsed)
-            #     self.logger.record("time/iterations", iteration, exclude="tensorboard")
-            #     if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
-            #         self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
-            #         self.logger.record("rollout/ep_len_mean", safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer]))
-            #     self.logger.record("time/fps", fps)
-            #     self.logger.record("time/time_elapsed", int(time_elapsed), exclude="tensorboard")
-            #     self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
-            #     self.logger.dump(step=self.num_timesteps)
-
-        '=============================================================================================='
-        if self.first_reward_train == 2:
-            self.train()
-        else:
-            self.train_unsuper()
-        '=============================================================================================='
 
         callback.on_training_end()
 

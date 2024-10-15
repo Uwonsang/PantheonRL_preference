@@ -17,6 +17,8 @@ from pantheonrl.algos.bc import BCShell, reconstruct_policy
 
 from overcookedgym.overcooked_utils import LAYOUT_LIST
 from reward_model import RewardModel
+from stable_baselines3.common.env_util import make_vec_overcooked_env
+from stable_baselines3.common.vec_env import VecNormalize
 
 ENV_LIST = ['OvercookedMultiEnv-v0']
 
@@ -46,8 +48,13 @@ def input_check(args):
 
 
 def generate_env(args):
-    # TODO multi-processing & gpu-processing
-    env = gym.make(args.env, **args.env_config, is_self_play=args.self_play)
+    # TODO gpu-processing
+    if args.ego == 'PPO_REWARD':
+        env = make_vec_overcooked_env(args.env, n_envs=args.n_envs, monitor_dir=args.tensorboard_log,
+                                      seed=args.seed, layout_name=args.env_config, is_self_play=args.self_play)
+        env = VecNormalize(env, norm_reward=False)
+    else:
+        env = gym.make(args.env, **args.env_config, is_self_play=args.self_play)
 
     if args.framestack > 1:
         env = frame_wrap(env, args.framestack)
@@ -87,8 +94,8 @@ def generate_ego(env, args):
     elif args.ego == 'PPO_REWARD':
         # instantiating the reward model
         reward_model = RewardModel(
-            env.env.observation_space.shape[0],
-            env.env.action_space.n,
+            env.observation_space.shape[0],  # self.mdp.featurize_state
+            env.action_space.n,
             size_segment=args.re_segment,
             activation=args.re_act,
             lr=args.re_lr,
@@ -109,8 +116,7 @@ def generate_ego(env, args):
                            num_interaction=args.re_num_interaction,
                            num_feed=args.re_num_feed, feed_type=args.re_feed_type, re_update=args.re_update,
                            max_feed=args.re_max_feed, size_segment=args.re_segment, max_ep_len=args.max_ep_len,
-                           verbose=args.ego_config['verbose'],
-                           unsuper_step=args.unsuper_step, unsuper_n_epochs=args.unsuper_n_epochs)
+                           verbose=args.ego_config['verbose'])
         return model
 
     elif args.ego == 'ModularAlgorithm':
@@ -312,5 +318,6 @@ if __name__ == '__main__':
         transition = env.get_transitions()
         transition.write_transition(args.record)
 
-    if args.ego_save:
-        ego.save(args.ego_save)
+    # TODO need to fixed ego_save
+    # if args.ego_save:
+    #     ego.save(args.ego_save)

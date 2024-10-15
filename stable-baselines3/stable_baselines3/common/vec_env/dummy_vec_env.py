@@ -136,3 +136,8 @@ class DummyVecEnv(VecEnv):
     def _get_target_envs(self, indices: VecEnvIndices) -> List[gym.Env]:
         indices = self._get_indices(indices)
         return [self.envs[i] for i in indices]
+
+    '''for overcooked'''
+    def add_partner_agent(self, agent, player_num=1):
+        for env in self.envs:
+            env.add_partner_agent(agent, player_num=player_num)
