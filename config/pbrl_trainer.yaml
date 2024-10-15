@@ -2,7 +2,7 @@
 # Basic setup # args from train_PrefPPO
 seed : 1
 n_steps : 400
-lr : 0.001
+lr : 0.0003
 total_timesteps : 2500000
 batch_size : 64
 ent_coef : 0.01
@@ -11,7 +11,7 @@ num_layer : 2
 use_sde : False
 sde_freq : -1
 experiment: ppo_reward
-gae_lambda : 0.98
+gae_lambda : 0.95
 n_epochs : 10
 normalize : 1
 n_envs : 16
